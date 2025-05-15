@@ -7,13 +7,19 @@ local LocalPlayer = Players.LocalPlayer
 local ESP_ENABLED = true
 local ESP_FOLDER = {}
 
--- Toggle ESP com tecla K
+-- Alternar ESP com tecla K
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
 		ESP_ENABLED = not ESP_ENABLED
 		for _, item in pairs(ESP_FOLDER) do
 			for _, element in pairs(item) do
-				if element then
+				if typeof(element) == "table" then -- Skeleton
+					for _, bone in ipairs(element) do
+						if bone.line then
+							bone.line.Visible = ESP_ENABLED
+						end
+					end
+				elseif element and element.Visible ~= nil then
 					element.Visible = ESP_ENABLED
 				end
 			end
@@ -23,8 +29,7 @@ end)
 
 -- Criar ESP para um jogador
 local function createESP(player)
-	if player == LocalPlayer then return end
-	if ESP_FOLDER[player] then return end
+	if player == LocalPlayer or ESP_FOLDER[player] then return end
 
 	local box = Drawing.new("Square")
 	box.Thickness = 1
@@ -53,7 +58,39 @@ local function createESP(player)
 	hpText.Outline = true
 	hpText.Visible = false
 
-	ESP_FOLDER[player] = {box = box, name = nameText, dist = distanceText, hp = hpText}
+	local skeleton = {}
+	local bones = {
+		{"Head", "UpperTorso"},
+		{"UpperTorso", "LowerTorso"},
+		{"UpperTorso", "LeftUpperArm"},
+		{"UpperTorso", "RightUpperArm"},
+		{"LeftUpperArm", "LeftLowerArm"},
+		{"RightUpperArm", "RightLowerArm"},
+		{"LeftLowerArm", "LeftHand"},
+		{"RightLowerArm", "RightHand"},
+		{"LowerTorso", "LeftUpperLeg"},
+		{"LowerTorso", "RightUpperLeg"},
+		{"LeftUpperLeg", "LeftLowerLeg"},
+		{"RightUpperLeg", "RightLowerLeg"},
+		{"LeftLowerLeg", "LeftFoot"},
+		{"RightLowerLeg", "RightFoot"},
+	}
+
+	for _, bone in ipairs(bones) do
+		local line = Drawing.new("Line")
+		line.Color = Color3.new(1, 1, 1)
+		line.Thickness = 1
+		line.Visible = false
+		table.insert(skeleton, {from = bone[1], to = bone[2], line = line})
+	end
+
+	ESP_FOLDER[player] = {
+		box = box,
+		name = nameText,
+		dist = distanceText,
+		hp = hpText,
+		skeleton = skeleton
+	}
 
 	RunService.RenderStepped:Connect(function()
 		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
@@ -80,11 +117,28 @@ local function createESP(player)
 			hpText.Position = Vector2.new(pos.X, pos.Y + boxSize.Y / 2 + 18)
 			hpText.Text = "HP: " .. math.floor(humanoid.Health)
 			hpText.Visible = ESP_ENABLED and onScreen
+
+			for _, bone in ipairs(skeleton) do
+				local partFrom = player.Character:FindFirstChild(bone.from)
+				local partTo = player.Character:FindFirstChild(bone.to)
+				if partFrom and partTo then
+					local pos1, vis1 = Camera:WorldToViewportPoint(partFrom.Position)
+					local pos2, vis2 = Camera:WorldToViewportPoint(partTo.Position)
+					bone.line.From = Vector2.new(pos1.X, pos1.Y)
+					bone.line.To = Vector2.new(pos2.X, pos2.Y)
+					bone.line.Visible = ESP_ENABLED and vis1 and vis2 and onScreen
+				else
+					bone.line.Visible = false
+				end
+			end
 		else
 			box.Visible = false
 			nameText.Visible = false
 			distanceText.Visible = false
 			hpText.Visible = false
+			for _, bone in ipairs(skeleton) do
+				bone.line.Visible = false
+			end
 		end
 	end)
 end
@@ -97,7 +151,7 @@ Players.PlayerAdded:Connect(function(player)
 	end)
 end)
 
--- Adicionar ESP a jogadores já conectados
+-- Adicionar ESP a jogadores existentes
 for _, player in pairs(Players:GetPlayers()) do
 	if player ~= LocalPlayer then
 		createESP(player)
